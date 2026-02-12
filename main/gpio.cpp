@@ -9,6 +9,29 @@
 #include <freertos/idf_additions.h>
 #include <iostream>
 #include "BLEHID.h"
+#include <iot_button.h>
+#include <button_gpio.h>
+#include <button_types.h>
+
+// create gpio button
+const button_config_t btn_cfg = {0};
+const button_gpio_config_t btn_gpio_cfg = {
+    .gpio_num = 25,
+    .active_level = 0,
+};
+button_handle_t gpio_btn = NULL;
+esp_err_t ret = iot_button_new_gpio_device(&btn_cfg, &btn_gpio_cfg, &gpio_btn);
+//if(NULL == gpio_btn) {
+//    ESP_LOGE("TAG", "Button create failed");
+//}
+
+static void button_single_click_cb(void *arg,void *usr_data)
+{
+    ESP_LOGI("TAG", "BUTTON_SINGLE_CLICK");
+}
+
+uint32_t res = iot_button_register_cb(gpio_btn, BUTTON_SINGLE_CLICK, NULL, button_single_click_cb,NULL);
+
 
 // Button pins
 #define BUTTON_PLAY_PAUSE   GPIO_NUM_25
@@ -16,6 +39,8 @@
 #define BUTTON_PREV         GPIO_NUM_27
 #define BUTTON_VOL_UP       GPIO_NUM_32
 #define BUTTON_VOL_DOWN     GPIO_NUM_33
+
+
 
 #define NUM_BUTTONS 5
 
@@ -69,6 +94,8 @@ void initGPIO() {
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .intr_type = GPIO_INTR_DISABLE,
     };
+
+	
     gpio_config(&led_config);
     
     // Turn off all LEDs
@@ -89,6 +116,9 @@ void initGPIO() {
         ledOff(LED_PLAYING);
         vTaskDelay(100 / portTICK_PERIOD_MS);
     }
+
+	
+	
 }
 
 

@@ -5,12 +5,14 @@
 #include "BLEHID.cpp"
 #include <iostream>
 
-#include "gpio.cpp"
+//#include "gpio.cpp"
+#include "BLEHID.h"
+#include "input.cpp"
 
 MusicRemote remote;
 
 
-void testTask() {
+/*void testTask() {
     printf("Test interface started\n");
     printf("Commands: p=play, n=next, b=prev, u=volup, d=voldown, t=test, h=help\n");
     
@@ -77,7 +79,7 @@ void testTask() {
         vTaskDelay(10 / portTICK_PERIOD_MS);
     }
 }
-
+*/
 void setup() {
   //Serial.begin(115200);
   std::cout << "Starting BLE work!\n";
@@ -86,9 +88,55 @@ void setup() {
   remote.begin();
 }
 
+static void main_task(void* arg)
+{
+    int64_t last_time = 0;
+    const int64_t debounce_us = 150 * 1000; // 100 ms
+    gpio_num_t io_num;
+    for (;;) {
+        if (xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY)) {
+			//vTaskDelay(1000 / portTICK_PERIOD_MS);
+            //printf("GPIO[%d] intr, val: %d\n", io_num, gpio_get_level(io_num));
+			int64_t now = esp_timer_get_time();
+	        if (now - last_time < debounce_us) {
+	            continue;
+	        }
+	        last_time = now;
+			/*if (!remote.isConnected()) {
+	            continue;
+	        }*/
+			switch(io_num) {
+				case INPUT_PLAY_PAUSE:
+					remote.write(KEY_MEDIA_PLAY_PAUSE);
+					break;
+				case INPUT_PREVIOUS_TRACK:
+					remote.write(KEY_MEDIA_PREVIOUS_TRACK);
+					printf("pressed\n");
+					break;
+				case INPUT_NEXT_TRACK:
+					remote.write(KEY_MEDIA_NEXT_TRACK);
+					break;
+				default:
+					break;
+				}
+
+			// held down
+	        while (gpio_get_level(io_num) == 0) {
+	            vTaskDelay(pdMS_TO_TICKS(50)); // yields CPU
+	        }
+			printf("released\n");
+			vTaskDelay(pdMS_TO_TICKS(150));
+		}
+    }
+}
+
 extern "C" {void app_main(void);}
 void app_main(void) {
   setup();
+  input_setup();
+  xTaskCreate(main_task, "main_task", 2048, NULL, 10, NULL);
+  //main_task(0);
+/*
   while (1) {
   if(remote.isConnected()) {
     printf("Sending 'Hello world'...\n");
@@ -98,12 +146,14 @@ void app_main(void) {
 
     printf("Sending Play/Pause media key...\n");
     remote.write(KEY_MEDIA_PLAY_PAUSE);
-    initGPIO();
-	testTask();
+    //initGPIO();
+	//testTask();
 	}
 
   printf("Waiting 5 seconds...\n");
   sleep(5);
 }
+*/
+
 //return 0;
 }
