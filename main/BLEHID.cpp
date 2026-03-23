@@ -39,7 +39,7 @@ static const uint8_t _hidReportDescriptor[] = {
   END_COLLECTION(0)                  // END_COLLECTION
 };
 
-MusicRemote::MusicRemote(std::string deviceName, std::string deviceManufacturer, uint8_t batteryLevel) : hid(0)
+MusicRemote::MusicRemote(std::string deviceName, std::string deviceManufacturer, uint8_t batteryLevel) : reconnectTaskHandle(nullptr), hid(nullptr)
 {
   this->deviceName = deviceName;
   this->deviceManufacturer = deviceManufacturer;
@@ -49,7 +49,8 @@ MusicRemote::MusicRemote(std::string deviceName, std::string deviceManufacturer,
 void MusicRemote::begin(void)
 {
   NimBLEDevice::init(deviceName);
-  BLEDevice::setSecurityAuth(true, true, false);
+  NimBLEDevice::setSecurityIOCap(BLE_HS_IO_NO_INPUT_OUTPUT);
+  BLEDevice::setSecurityAuth(true, false, true);
 
   this->pServer = NimBLEDevice::createServer();
   this->pServer->setCallbacks(this);
@@ -66,12 +67,35 @@ void MusicRemote::begin(void)
   this->pAdvertising = pServer->getAdvertising();
   this->pAdvertising->setAppearance(HID_KEYBOARD);
   this->pAdvertising->addServiceUUID(hid->getHidService()->getUUID());
+
+  pAdvertising->setMinInterval(0x20);  // 20ms
+  pAdvertising->setMaxInterval(0x40);  // 40ms
+
   this->pAdvertising->start();
   hid->setBatteryLevel(batteryLevel);
+
+  xTaskCreate(
+    reconnectTaskStatic,
+    "ble_reconnect",
+    4096,
+    this,
+    1,
+    &reconnectTaskHandle
+  );
 }
 
 void MusicRemote::end(void)
 {
+  if (reconnectTaskHandle) {
+    vTaskDelete(reconnectTaskHandle);
+    reconnectTaskHandle = nullptr;
+  }
+  
+  if (pAdvertising) {
+    pAdvertising->stop();
+  }
+  
+  NimBLEDevice::deinit(true);
 }
 
 bool MusicRemote::isConnected(void) const {
@@ -95,12 +119,37 @@ void MusicRemote::sendReport(MediaKeyReport* keys)
 
 void MusicRemote::onConnect(NimBLEServer* pServer, NimBLEConnInfo& connInfo) {
     connected = true;
+    connectionFailures = 0;
+    pServer->updateConnParams(
+      connInfo.getConnHandle(),
+      12,   // min: 15ms
+      24,   // max: 30ms  
+      0,    // latency: 0
+      400   // timeout: 4s
+    );
+
+    if (pAdvertising->isAdvertising()) {
+      pAdvertising->stop();
+    }
+    
     if (connectCallback) connectCallback();
 }
 
 void MusicRemote::onDisconnect(NimBLEServer* pServer, NimBLEConnInfo& connInfo, int reason) {
     connected = false;
     if (disconnectCallback) disconnectCallback();
+
+	uint32_t delay_ms = 0;
+    if (connectionFailures > 0) {
+      delay_ms = 100 << (connectionFailures - 1);
+      if (delay_ms > 1000) delay_ms = 1000;
+    }
+    
+    vTaskDelay(pdMS_TO_TICKS(delay_ms));
+    
+    if (!pAdvertising->isAdvertising()) {
+      pAdvertising->start();
+    }
 }
 
 void MusicRemote::onConnect(Callback cb) {
@@ -152,4 +201,32 @@ size_t MusicRemote::write(const MediaKeyReport c)
 	vTaskDelay(3);
 	release(c);            // Keyup
 	return p;              // just return the result of press() since release() almost always returns 1
+}
+
+
+void MusicRemote::reconnectTaskStatic(void* param) {
+  MusicRemote* remote = static_cast<MusicRemote*>(param);
+  remote->reconnectTask();
+}
+
+void MusicRemote::reconnectTask() {
+  const TickType_t CHECK_INTERVAL = pdMS_TO_TICKS(5000);
+  
+  while (true) {
+    vTaskDelay(CHECK_INTERVAL);
+    
+    if (!connected && !pAdvertising->isAdvertising()) {
+      pAdvertising->start();
+    }
+
+    if (connected && connectionFailures > 0) {
+      static uint32_t connectedTime = 0;
+      connectedTime += 5;
+      
+      if (connectedTime >= 30) {
+        connectionFailures = 0;
+        connectedTime = 0;
+      }
+    }
+  }
 }

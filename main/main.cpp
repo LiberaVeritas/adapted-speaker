@@ -10,6 +10,7 @@
 #include "freertos/idf_additions.h"
 #include "freertos/projdefs.h"
 #include "input.cpp"
+#include "nvs_flash.h"
 
 MusicRemote remote;
 
@@ -18,8 +19,12 @@ MusicRemote remote;
 void setup() {
   //Serial.begin(115200);
   std::cout << "Starting BLE work!\n";
-  remote.onConnect([](){ printf("Connected\n"); });
-  remote.onDisconnect([](){ printf("Disconnected\n"); remote.pAdvertising->start(); });
+  remote.onConnect([](){ 
+	printf("Connected\n"); 
+  });
+  remote.onDisconnect([](){ 
+	printf("Disconnected\n"); remote.pAdvertising->start(); 
+  });
   remote.begin();
 }
 
@@ -73,6 +78,8 @@ extern "C" {void app_main(void);}
 void app_main(void) {
   setup();
   input_setup();
+
+  nvs_flash_init();
 
   gpio_isr_handler_add(INPUT_PLAY_PAUSE, gpio_isr_handler, (void*)INPUT_PLAY_PAUSE);
   //hook isr handler for specific gpio pin

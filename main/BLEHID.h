@@ -24,7 +24,7 @@ const MediaKeyReport KEY_MEDIA_VOLUME_DOWN = {64, 0};
 const MediaKeyReport KEY_MEDIA_CONSUMER_CONTROL_CONFIGURATION = {0, 64}; // Media Selection
 
 
-class MusicRemote : public NimBLEServerCallbacks, NimBLECharacteristicCallbacks
+class MusicRemote : public NimBLEServerCallbacks, public NimBLECharacteristicCallbacks
 {
 public:
   using Callback = std::function<void(void)>;
@@ -48,10 +48,13 @@ public:
 protected:
   void onConnect(NimBLEServer* pServer, NimBLEConnInfo& connInfo) override;
   void onDisconnect(NimBLEServer* pServer, NimBLEConnInfo& connInfo, int reason) override;
+  void reconnectTask();
+  static void reconnectTaskStatic(void *param);
+  TaskHandle_t reconnectTaskHandle = nullptr;
   virtual void onWrite(NimBLECharacteristic* pCharacteristic, NimBLEConnInfo& connInfo) override;
 
 protected:
-  NimBLEHIDDevice*      hid;
+  NimBLEHIDDevice*      hid = nullptr;
 //  NimBLECharacteristic* outputKeyboard;
   NimBLECharacteristic* inputMediaKeys;
   MediaKeyReport _mediaKeyReport;
@@ -60,6 +63,7 @@ protected:
   std::string deviceManufacturer;
   std::string deviceName;
   bool connected = false;
+  int connectionFailures = 0;
 
   NimBLEServer *pServer;
 
