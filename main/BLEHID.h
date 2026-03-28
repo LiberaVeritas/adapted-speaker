@@ -1,76 +1,79 @@
-#ifndef ESP32_MUSIC_REMOTE_H
-#define ESP32_MUSIC_REMOTE_H
-#include "NimBLEAdvertising.h"
-#include "sdkconfig.h"
-#if defined(CONFIG_BT_ENABLED)
-//#include "nimconfig.h"
-#if defined(CONFIG_BT_NIMBLE_ROLE_PERIPHERAL)
+// BLEHID.h - Auto-Reconnect Only
 
+#ifndef BLEHID_H
+#define BLEHID_H
+
+#include <NimBLEDevice.h>
 #include <NimBLEServer.h>
-#include <NimBLECharacteristic.h>
 #include <NimBLEHIDDevice.h>
-#include <functional>
-
 
 typedef uint8_t MediaKeyReport[2];
 
-const MediaKeyReport KEY_MEDIA_NEXT_TRACK = {1, 0};
-const MediaKeyReport KEY_MEDIA_PREVIOUS_TRACK = {2, 0};
-const MediaKeyReport KEY_MEDIA_STOP = {4, 0};
-const MediaKeyReport KEY_MEDIA_PLAY_PAUSE = {8, 0};
-const MediaKeyReport KEY_MEDIA_MUTE = {16, 0};
-const MediaKeyReport KEY_MEDIA_VOLUME_UP = {32, 0};
-const MediaKeyReport KEY_MEDIA_VOLUME_DOWN = {64, 0};
-const MediaKeyReport KEY_MEDIA_CONSUMER_CONTROL_CONFIGURATION = {0, 64}; // Media Selection
+// Media key definitions
+const MediaKeyReport KEY_MEDIA_NEXT_TRACK     = {0x00, 0x01};
+const MediaKeyReport KEY_MEDIA_PREVIOUS_TRACK = {0x00, 0x02};
+const MediaKeyReport KEY_MEDIA_STOP           = {0x00, 0x04};
+const MediaKeyReport KEY_MEDIA_PLAY_PAUSE     = {0x00, 0x08};
+const MediaKeyReport KEY_MEDIA_MUTE           = {0x00, 0x10};
+const MediaKeyReport KEY_MEDIA_VOLUME_UP      = {0x00, 0x20};
+const MediaKeyReport KEY_MEDIA_VOLUME_DOWN    = {0x00, 0x40};
 
+typedef std::function<void()> Callback;
 
 class MusicRemote : public NimBLEServerCallbacks, public NimBLECharacteristicCallbacks
 {
+private:
+    std::string deviceName;
+    std::string deviceManufacturer;
+    uint8_t batteryLevel;
+    bool connected = false;
+    uint8_t connectionFailures = 0;
+    
+	TaskHandle_t reconnectTaskHandle = nullptr;
+    NimBLEHIDDevice* hid = nullptr;
+	NimBLEServer* pServer = nullptr;
+    
+    NimBLEAdvertising* pAdvertising = nullptr;
+    NimBLECharacteristic* inputMediaKeys = nullptr;
+	
+    
+    MediaKeyReport _mediaKeyReport = {0x00, 0x00};
+    
+    Callback connectCallback = nullptr;
+    Callback disconnectCallback = nullptr;
+    
+    
+    
+    void sendReport(MediaKeyReport* keys);
+    void reconnectTask();
+    
+    // Static wrapper for FreeRTOS task
+    static void reconnectTaskWrapper(void* param);
+    
 public:
-  using Callback = std::function<void(void)>;
-  NimBLEAdvertising *pAdvertising;
-
-public:
-  MusicRemote(std::string deviceName = "Music Remote", std::string deviceManufacturer = "Espressif", uint8_t batteryLevel = 100);
-  void begin(void);
-  void end(void);
-  void sendReport(MediaKeyReport* keys);
-  size_t press(const MediaKeyReport k);
-  size_t release(const MediaKeyReport k);
-  size_t write(const MediaKeyReport c);
-  //size_t write(const uint8_t *buffer, size_t size);
-  void releaseAll(void);
-  bool isConnected(void) const;
-  void setBatteryLevel(uint8_t level);
-  void onConnect(Callback cb);
-  void onDisconnect(Callback cb);
-
-protected:
-  void onConnect(NimBLEServer* pServer, NimBLEConnInfo& connInfo) override;
-  void onDisconnect(NimBLEServer* pServer, NimBLEConnInfo& connInfo, int reason) override;
-  void reconnectTask();
-  static void reconnectTaskStatic(void *param);
-  TaskHandle_t reconnectTaskHandle = nullptr;
-  virtual void onWrite(NimBLECharacteristic* pCharacteristic, NimBLEConnInfo& connInfo) override;
-
-protected:
-  NimBLEHIDDevice*      hid = nullptr;
-//  NimBLECharacteristic* outputKeyboard;
-  NimBLECharacteristic* inputMediaKeys;
-  MediaKeyReport _mediaKeyReport;
-
-  uint8_t batteryLevel;
-  std::string deviceManufacturer;
-  std::string deviceName;
-  bool connected = false;
-  int connectionFailures = 0;
-
-  NimBLEServer *pServer;
-
-  Callback connectCallback    = nullptr;
-  Callback disconnectCallback = nullptr;
+    MusicRemote(std::string deviceName = "Music Remote", 
+                std::string deviceManufacturer = "Espressif", 
+                uint8_t batteryLevel = 100);
+    
+    void begin(void);
+    void end(void);
+    bool isConnected(void) const;
+    void setBatteryLevel(uint8_t level);
+    
+    // Media key functions
+    size_t press(const MediaKeyReport k);
+    size_t release(const MediaKeyReport k);
+    size_t write(const MediaKeyReport k);
+    
+    // Callback registration
+    void onConnect(Callback cb);
+    void onDisconnect(Callback cb);
+    
+    // NimBLE callbacks
+    void onConnect(NimBLEServer* pServer, NimBLEConnInfo& connInfo) override;
+    void onDisconnect(NimBLEServer* pServer, NimBLEConnInfo& connInfo, int reason) override;
+    void onAuthenticationComplete(NimBLEConnInfo& connInfo) override;
+    void onWrite(NimBLECharacteristic* pCharacteristic, NimBLEConnInfo& connInfo) override;
 };
 
-#endif // CONFIG_BT_NIMBLE_ROLE_PERIPHERAL
-#endif // CONFIG_BT_ENABLED
-#endif // ESP32_MUSIC_REMOTE_H
+#endif // BLEHID_H
