@@ -49,7 +49,7 @@ MusicRemote::MusicRemote(std::string deviceName, std::string deviceManufacturer,
 void MusicRemote::begin(void)
 {
   NimBLEDevice::init(deviceName);
-  BLEDevice::setSecurityAuth(true, true, false);
+  BLEDevice::setSecurityAuth(true, true, true);
 
   this->pServer = NimBLEDevice::createServer();
   this->pServer->setCallbacks(this);

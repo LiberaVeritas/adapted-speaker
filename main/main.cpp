@@ -10,16 +10,25 @@
 #include "freertos/idf_additions.h"
 #include "freertos/projdefs.h"
 #include "input.cpp"
+#include "nvs_flash.h"
 
 MusicRemote remote;
 
+void connect() {
+  printf("Connected\n");
+  remote.pAdvertising->stop();
+}
 
+void disconnect() {
+  printf("Disconnected\n");
+  remote.pAdvertising->start();
+}
 
 void setup() {
   //Serial.begin(115200);
   std::cout << "Starting BLE work!\n";
-  remote.onConnect([](){ printf("Connected\n"); });
-  remote.onDisconnect([](){ printf("Disconnected\n"); remote.pAdvertising->start(); });
+  remote.onConnect(connect);
+  remote.onDisconnect(disconnect);
   remote.begin();
 }
 
@@ -71,6 +80,12 @@ static void main_task(void* arg)
 
 extern "C" {void app_main(void);}
 void app_main(void) {
+  esp_err_t ret = nvs_flash_init();
+  if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+    nvs_flash_erase();
+    nvs_flash_init();
+  }
+
   setup();
   input_setup();
 
