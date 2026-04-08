@@ -49,7 +49,9 @@ MusicRemote::MusicRemote(std::string deviceName, std::string deviceManufacturer,
 void MusicRemote::begin(void)
 {
   NimBLEDevice::init(deviceName);
-  BLEDevice::setSecurityAuth(true, true, true);
+  BLEDevice::setSecurityAuth(true, false, true);
+  NimBLEDevice::setSecurityIOCap(BLE_HS_IO_NO_INPUT_OUTPUT);
+  NimBLEDevice::setPower(ESP_PWR_LVL_P9);
 
   this->pServer = NimBLEDevice::createServer();
   this->pServer->setCallbacks(this);
@@ -64,10 +66,16 @@ void MusicRemote::begin(void)
   hid->startServices();
 
   this->pAdvertising = pServer->getAdvertising();
+  this->pAdvertising->reset();
   this->pAdvertising->setAppearance(HID_KEYBOARD);
+  this->pAdvertising->setName(deviceName);
+  this->pAdvertising->setDiscoverableMode(BLE_GAP_DISC_MODE_GEN);
+  this->pAdvertising->setConnectableMode(BLE_GAP_CONN_MODE_UND);
+  this->pAdvertising->setScanFilter(false, false);
+  this->pAdvertising->enableScanResponse(true);
   this->pAdvertising->addServiceUUID(hid->getHidService()->getUUID());
   this->pAdvertising->start();
-  hid->setBatteryLevel(batteryLevel);
+  //hid->setBatteryLevel(batteryLevel);
 }
 
 void MusicRemote::end(void)
